@@ -3,50 +3,58 @@
 
 start:
     cli
-
-    ; Setup segment registers
     xor ax, ax
     mov ds, ax
     mov es, ax
     mov ss, ax
     mov sp, 0x7C00
-
     sti
 
-    ; Print "Loading Micro Mouse Terminal..."
-    mov si, msg_loading
-.print_char:
+    ; Print "Booting..."
+    mov si, msg_boot
+.print_msg:
     lodsb
     or al, al
-    jz .load_kernel
+    jz .load_loadbin
     mov ah, 0x0E
     int 0x10
-    jmp .print_char
+    jmp .print_msg
 
-.load_kernel:
-    mov bx, 0x0000          ; Offset within ES
-    mov ax, 0x8000          ; Load segment 0x8000
+; -----------------------------
+; Load load.bin (8 sectors, 4096 bytes)
+; -----------------------------
+.load_loadbin:
+    mov ax, 0x7000       ; Load load.bin at segment 0x7000
     mov es, ax
+    xor bx, bx
 
-    mov ah, 0x02            ; BIOS read sectors
-    mov al, 16              ; Number of sectors to read (kernel size)
-    mov ch, 0               ; Cylinder 0
-    mov dh, 0               ; Head 0
-    mov cl, 2               ; Start sector 2 (sector 1 is bootloader)
-    mov dl, 0x00            ; Drive 0 (floppy A:)
+    mov dl, 0x00         ; Drive A:
+    mov ch, 0
+    mov dh, 0
+    mov cl, 2            ; load.bin starts at sector 2
+
+    mov si, load_sectors ; number of sectors to read
+.read_loop:
+    mov ah, 0x02         ; BIOS read 1 sector
+    mov al, 1
     int 0x13
-    jc .disk_error          ; Jump if carry set (error)
+    jc .disk_error
 
-    ; Jump to kernel at 0x8000:0000
-    cli
-    mov ax, 0x8000
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
-    mov sp, 0xFFFF          ; Stack top in kernel segment
-    sti
+    add bx, 512          ; next memory offset
 
-    jmp 0x8000:0000        ; Far jump to kernel start
+    ; Advance sector
+    inc cl
+    cmp cl, 0x3F
+    jle .no_cylinder_inc
+    xor cl, cl
+    inc ch
+.no_cylinder_inc:
+
+    dec si
+    jnz .read_loop
+
+    ; Jump to load.bin
+    jmp 0x7000:0000
 
 .disk_error:
     mov si, msg_error
@@ -58,8 +66,16 @@ start:
     int 0x10
     jmp .error_loop
 
-msg_loading db "Loading Micro Mouse Terminal...", 0
-msg_error db "Disk read error!", 0
+msg_boot db "Booting...",0
+msg_error db "Disk read error!",0
 
+; -----------------------------
+; Configuration
+; -----------------------------
+load_sectors equ 8  ; load.bin = 4096 bytes = 8 sectors
+
+; -----------------------------
+; Pad bootloader to 512 bytes
+; -----------------------------
 times 510-($-$$) db 0
 dw 0xAA55
