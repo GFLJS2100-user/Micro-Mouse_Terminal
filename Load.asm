@@ -1,5 +1,5 @@
 [BITS 16]
-[ORG 0x0000]  ; loaded at 0x7000:0000 by bootloader
+[ORG 0x0000]  ; loaded at 0x7000:0000
 
 start:
     cli
@@ -21,29 +21,26 @@ start:
     jmp .print_msg
 
 .print_bar_start:
-    ; Print opening bracket '['
     mov al, '['
     mov ah, 0x0E
     int 0x10
 
-    ; Initialize empty bar: 16 spaces
-    mov cx, 16
+    mov cx, total_sectors
 .fill_spaces:
     mov al, ' '
     mov ah, 0x0E
     int 0x10
     loop .fill_spaces
 
-    ; Print closing bracket ']'
     mov al, ']'
     mov ah, 0x0E
     int 0x10
 
-    ; Move cursor back 17 positions (inside bar)
-    mov cx, 17
+    ; Move cursor back inside the bar
+    mov cx, total_sectors+1
 .cursor_back:
-    mov ah, 0x0E
     mov al, 8
+    mov ah, 0x0E
     int 0x10
     loop .cursor_back
 
@@ -52,36 +49,41 @@ start:
     mov es, ax
     xor bx, bx
 
-    mov dl, 0x00       ; drive A:
+    mov dl, 0x00
     mov ch, 0
     mov dh, 0
-    mov cl, 10         ; kernel.bin starts after load.bin (sector 10)
+    mov cl, kernel_start_sector
 
-    mov si, 16         ; 16 sectors = 8192 bytes
+    mov si, total_sectors
 .load_loop:
     mov ah, 0x02
     mov al, 1
     int 0x13
     jc .disk_error
 
-    add bx, 512        ; next sector
+    add bx, 512
 
-    ; Print '#' in progress bar
+    ; Print progress bar
     mov al, '#'
     mov ah, 0x0E
     int 0x10
 
+    ; Correct CHS increment (18 sectors per track, 2 heads)
     inc cl
-    cmp cl, 0x3F
-    jle .no_cylinder_inc
-    xor cl, cl
-    inc ch
+    cmp cl, 19        ; SPT = 18 → next track
+    jl .no_cylinder_inc
+    mov cl, 1
+    inc dh             ; next head
+    cmp dh, 2
+    jl .no_cylinder_inc
+    mov dh, 0
+    inc ch             ; next cylinder
 .no_cylinder_inc:
 
     dec si
     jnz .load_loop
 
-    ; CRLF after progress bar
+    ; Newline after progress bar
     mov al, 13
     mov ah, 0x0E
     int 0x10
@@ -112,4 +114,7 @@ start:
 msg_loading db "Loading Micro Mouse Terminal: ",0
 msg_error   db "Disk read error!",0
 
-times 4096-($-$$) db 0  ; pad load.bin to 4096 bytes
+total_sectors      equ 16
+kernel_start_sector equ 10
+
+times 4096-($-$$) db 0
