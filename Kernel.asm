@@ -3,8 +3,8 @@
 
 start:
     call clear_screen
-    call welcome_screen      ; Display welcome message
-    call clear_screen        ; Clear screen again for prompt
+    call welcome_screen
+    call clear_screen
 
 main_loop:
     mov si, prompt
@@ -39,35 +39,34 @@ welcome_screen:
 
 .wait_key:
     xor ah, ah
-    int 0x16           ; Wait for any key
+    int 0x16
     ret
 
 ; -----------------------------
-; Clear screen and reset cursor
+; Clear screen
 ; -----------------------------
 clear_screen:
     pusha
     mov ax, 0xB800
     mov es, ax
     xor di, di
-    mov ah, 0x07       ; light gray on black
+    mov ah, 0x07
     mov al, ' '
-    mov cx, 2000       ; 80 * 25 = 2000 chars
+    mov cx, 2000
 .clear_loop:
     stosw
     loop .clear_loop
 
-    ; Move cursor to (0, 0)
     mov ah, 0x02
-    mov bh, 0x00       ; page 0
-    mov dh, 0x00       ; row 0
-    mov dl, 0x00       ; col 0
+    mov bh, 0x00
+    mov dh, 0x00
+    mov dl, 0x00
     int 0x10
     popa
     ret
 
 ; -----------------------------
-; Print string at SI
+; Print string
 ; -----------------------------
 print_string:
 .next_char:
@@ -81,78 +80,70 @@ print_string:
     ret
 
 ; -----------------------------
-; Read line into input_buf
-; Backspace will not erase prompt
+; Read line
 ; -----------------------------
 read_line:
     mov si, input_buf
-    xor cx, cx          ; cx = number of typed chars
+    xor cx, cx
 .read_char:
     xor ah, ah
-    int 0x16           ; BIOS: wait for key
-    cmp al, 13         ; Enter?
+    int 0x16
+    cmp al, 13
     je .done
-
-    cmp al, 8          ; Backspace?
+    cmp al, 8
     jne .store_char
-
-    ; If Backspace, delete last typed character if any
     cmp cx, 0
-    je .read_char      ; nothing to delete
+    je .read_char
     dec si
     dec cx
     mov ah, 0x0E
-    mov al, 8          ; move cursor back
+    mov al, 8
     int 0x10
-    mov al, ' '        ; overwrite character
+    mov al, ' '
     int 0x10
-    mov al, 8          ; move cursor back again
+    mov al, 8
     int 0x10
     jmp .read_char
-
 .store_char:
     mov [si], al
     inc si
     inc cx
     mov ah, 0x0E
-    int 0x10           ; Echo typed character
+    int 0x10
     jmp .read_char
-
 .done:
-    mov byte [si], 0   ; Null-terminate input buffer
+    mov byte [si], 0
     ret
 
 ; -----------------------------
-; Convert input_buf to lowercase
+; To lowercase
 ; -----------------------------
 to_lowercase:
     mov si, input_buf
 .lower_loop:
     mov al, [si]
     or al, al
-    jz .lower_done
+    jz .done
     cmp al, 'A'
-    jb .lower_skip
+    jb .skip
     cmp al, 'Z'
-    ja .lower_skip
-    add al, 32         ; 'a' - 'A' = 32
+    ja .skip
+    add al, 32
     mov [si], al
-.lower_skip:
+.skip:
     inc si
     jmp .lower_loop
-.lower_done:
+.done:
     ret
 
 ; -----------------------------
 ; Command handler
 ; -----------------------------
 handle_command:
-    ; Skip if input is empty
     mov al, [input_buf]
     cmp al, 0
     je .empty_input
 
-    ; help
     mov si, input_buf
     mov di, cmd_help
     call strcmp
@@ -177,7 +168,7 @@ handle_command:
     call strcmp
     cmp ax, 0
     jne .check_shutdown
-    call reboot_computer
+    call soft_reboot
     ret
 
 .check_shutdown:
@@ -190,7 +181,7 @@ handle_command:
     ret
 
 .empty_input:
-    ret                  ; do nothing for empty input
+    ret
 
 .unknown:
     mov si, msg_unknown
@@ -198,9 +189,7 @@ handle_command:
     ret
 
 ; -----------------------------
-; String Compare (SI vs DI)
-; Sets AX=0 if equal, else AX=1
-; Note: SI will be advanced by lodsb
+; String compare
 ; -----------------------------
 strcmp:
     xor ax, ax
@@ -209,61 +198,44 @@ strcmp:
     mov bl, [di]
     inc di
     cmp al, bl
-    jne .sc_not_equal
+    jne .neq
     or al, al
     jnz .sc_loop
     xor ax, ax
     ret
-.sc_not_equal:
+.neq:
     mov ax, 1
     ret
 
 ; -----------------------------
-; Hard reboot (keyboard controller) and shutdown routines
+; Soft reboot using BIOS warm reboot vector
 ; -----------------------------
-; reboot_computer: perform keyboard-controller reset (hard reboot)
-; -----------------------------
-reboot_computer:
+soft_reboot:
     cli
-    mov al, 0xFE
-    out 0x64, al        ; keyboard controller pulse reset
-    hlt                 ; if reboot fails, halt
-    jmp $               ; infinite loop
+    ; Set warm boot flag at 0x472 to 0x1234
+    mov word [0x472], 0x1234
+    ; Jump to BIOS start
+    jmp 0xFFFF:0x0000
     ret
 
 ; -----------------------------
-; shutdown_computer: attempt APM power-off; fall back to halt
+; Shutdown routine
 ; -----------------------------
 shutdown_computer:
     cli
-    ; Try APM power-off (function 0x5307)
     mov ax, 0x5307
-    mov bx, 0x0001      ; device (all)
-    mov cx, 0x0003      ; power state = off
+    mov bx, 0x0001
+    mov cx, 0x0003
     int 0x15
-    jc .apm_fail        ; if carry set, APM call failed
-
-    ; If APM succeeded, BIOS may power off the system here.
-    ; If it returns, fall through to halt as fallback.
-.apm_fail:
-    ; Best-effort ACPI/QEMU shutdown attempt: write to a common QEMU port
-    ; (non-standard; may or may not do anything)
-    push ax
-    mov dx, 0x604
-    mov ax, 0x2000
-    out dx, ax
-    pop ax
-
-    ; Fallback: halt CPU
-.halt_loop:
+    jc .halt
+.halt:
     hlt
-    jmp .halt_loop
-    ret
+    jmp .halt
 
 ; -----------------------------
-; Data Section
+; Data section
 ; -----------------------------
-msg_welcome      db 13,10,"Micro Mouse Terminal",13,10,0
+msg_welcome      db 13,10,"Micro Mouse Terminal by LevelPack1218",13,10,0
 msg_press_key    db 13,10,"Press any key to continue...",13,10,0
 
 prompt           db 13,10,"MMT> ",0
@@ -277,7 +249,4 @@ cmd_shutdown     db "shutdown",0
 
 input_buf        times 128 db 0
 
-; -----------------------------
-; Pad kernel to 8192 bytes
-; -----------------------------
 times 8192-($-$$) db 0
