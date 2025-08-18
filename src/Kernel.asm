@@ -3,7 +3,7 @@
 
 start:
     cli
-    call setup_exception_handlers
+    call setup_exception_vectors
     sti
 
     call clear_screen
@@ -19,12 +19,49 @@ main_loop:
     jmp main_loop
 
 ; -----------------------------
-; Exception handler setup
+; Setup IVT vectors for CPU exceptions
 ; -----------------------------
-setup_exception_handlers:
-    cli
-    ; Handlers are placeholders, in real mode without IDT, just labels
-    sti
+setup_exception_vectors:
+    ; Real-mode IVT: vector * 4 = segment:offset (each vector 4 bytes)
+    ; We'll set segment=CS (assume 0x8000), offset = handler label
+    ; CS=0x8000 in this kernel
+    mov ax, 0x8000
+
+    ; #PF - interrupt 14
+    mov dx, pf_handler
+    mov word [14*4], dx       ; offset
+    mov word [14*4+2], ax     ; segment
+
+    ; #GP - interrupt 13
+    mov dx, gp_handler
+    mov word [13*4], dx
+    mov word [13*4+2], ax
+
+    ; #NP - interrupt 11
+    mov dx, np_handler
+    mov word [11*4], dx
+    mov word [11*4+2], ax
+
+    ; #DF - interrupt 8
+    mov dx, df_handler
+    mov word [8*4], dx
+    mov word [8*4+2], ax
+
+    ; #SS - interrupt 12
+    mov dx, ss_handler
+    mov word [12*4], dx
+    mov word [12*4+2], ax
+
+    ; #BR - interrupt 5
+    mov dx, br_handler
+    mov word [5*4], dx
+    mov word [5*4+2], ax
+
+    ; #NM - interrupt 7
+    mov dx, nm_handler
+    mov word [7*4], dx
+    mov word [7*4+2], ax
+
     ret
 
 ; -----------------------------
