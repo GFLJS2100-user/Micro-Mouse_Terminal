@@ -30,7 +30,7 @@ ebr_drive_number:           db 0
                             db 0
 ebr_signature:              db 29h
 ebr_volume_id:              db 12h, 34h, 56h, 78h
-ebr_volume_label:           db 'MOHITE      '
+ebr_volume_label:           db 'MMTERMINAL '
 ebr_system_id:              db 'FAT12   '
 
 main:
