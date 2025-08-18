@@ -39,7 +39,7 @@ $(IMG): $(BOOTLOADER_BIN) $(KERNEL_BIN)
 	# Write bootloader to first sector
 	dd if=$(BOOTLOADER_BIN) of=$(IMG) bs=512 count=1 conv=notrunc
 	# Copy kernel into image using mtools
-	mcopy -i $(IMG) $(KERNEL_BIN) ::
+	mcopy -i $(KERNEL_BIN) $(IMG) ::
 
 # Clean generated files
 .PHONY: clean all
