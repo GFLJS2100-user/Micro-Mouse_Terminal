@@ -1,4 +1,4 @@
-# Makefile for building MMT.img from NASM assembly files
+# Makefile for building MMT.img from NASM assembly files in /src/
 
 # NASM assembler
 ASM = nasm
@@ -6,12 +6,12 @@ ASM = nasm
 # NASM flags
 ASMFLAGS = -f bin
 
-# Source files
-BOOTLOADER_SRC = Bootloader.asm
-LOAD_SRC       = Load.asm
-KERNEL_SRC     = Kernel.asm
+# Source files (inside /src/)
+BOOTLOADER_SRC = src/Bootloader.asm
+LOAD_SRC       = src/Load.asm
+KERNEL_SRC     = src/Kernel.asm
 
-# Output binary files
+# Output binary files (same folder as Makefile)
 BOOTLOADER_BIN = bootloader.bin
 LOAD_BIN       = load.bin
 KERNEL_BIN     = kernel.bin
