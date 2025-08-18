@@ -235,7 +235,7 @@ shutdown_computer:
 ; -----------------------------
 ; Data section
 ; -----------------------------
-msg_welcome      db 13,10,"Micro Mouse Terminal",13,10,0
+msg_welcome      db 13,10,"Micro Mouse Terminal by LevelPack1218",13,10,0
 msg_press_key    db 13,10,"Press any key to continue...",13,10,0
 
 prompt           db 13,10,"MMT> ",0
