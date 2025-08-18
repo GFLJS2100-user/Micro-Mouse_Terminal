@@ -1,11 +1,7 @@
 [BITS 16]
-[ORG 0x0000]    ; Kernel loaded at 0x8000:0000 by bootloader
+[ORG 0x0000]    ; Kernel is loaded at 0x8000:0000 by the bootloader
 
 start:
-    cli
-    call setup_exception_vectors
-    sti
-
     call clear_screen
     call welcome_screen
     call clear_screen
@@ -17,101 +13,6 @@ main_loop:
     call to_lowercase
     call handle_command
     jmp main_loop
-
-; -----------------------------
-; Setup IVT vectors for CPU exceptions
-; -----------------------------
-setup_exception_vectors:
-    ; Real-mode IVT: vector * 4 = segment:offset (each vector 4 bytes)
-    ; We'll set segment=CS (assume 0x8000), offset = handler label
-    ; CS=0x8000 in this kernel
-    mov ax, 0x8000
-
-    ; #PF - interrupt 14
-    mov dx, pf_handler
-    mov word [14*4], dx       ; offset
-    mov word [14*4+2], ax     ; segment
-
-    ; #GP - interrupt 13
-    mov dx, gp_handler
-    mov word [13*4], dx
-    mov word [13*4+2], ax
-
-    ; #NP - interrupt 11
-    mov dx, np_handler
-    mov word [11*4], dx
-    mov word [11*4+2], ax
-
-    ; #DF - interrupt 8
-    mov dx, df_handler
-    mov word [8*4], dx
-    mov word [8*4+2], ax
-
-    ; #SS - interrupt 12
-    mov dx, ss_handler
-    mov word [12*4], dx
-    mov word [12*4+2], ax
-
-    ; #BR - interrupt 5
-    mov dx, br_handler
-    mov word [5*4], dx
-    mov word [5*4+2], ax
-
-    ; #NM - interrupt 7
-    mov dx, nm_handler
-    mov word [7*4], dx
-    mov word [7*4+2], ax
-
-    ret
-
-; -----------------------------
-; Exception template
-; -----------------------------
-exception_template:
-    pusha
-.print_msg:
-    lodsb
-    or al, al
-    jz .halt_loop
-    mov ah, 0x0E
-    int 0x10
-    jmp .print_msg
-.halt_loop:
-    hlt
-    jmp .halt_loop
-    popa
-    iret
-
-; -----------------------------
-; CPU Exception Handlers
-; -----------------------------
-pf_handler:
-    mov di, pf_msg
-    jmp exception_template
-
-gp_handler:
-    mov di, gp_msg
-    jmp exception_template
-
-np_handler:
-    mov di, np_msg
-    jmp exception_template
-
-df_handler:
-    mov di, df_msg
-    jmp exception_template
-
-ss_handler:
-    mov di, ss_msg
-    jmp exception_template
-
-br_handler:
-    mov di, br_msg
-    jmp exception_template
-
-nm_handler:
-    mov di, nm_msg
-    jmp exception_template
 
 ; -----------------------------
 ; Welcome screen
@@ -307,16 +208,18 @@ strcmp:
     ret
 
 ; -----------------------------
-; Soft reboot
+; Soft reboot using BIOS warm reboot vector
 ; -----------------------------
 soft_reboot:
     cli
+    ; Set warm boot flag at 0x472 to 0x1234
     mov word [0x472], 0x1234
+    ; Jump to BIOS start
     jmp 0xFFFF:0x0000
     ret
 
 ; -----------------------------
-; Shutdown
+; Shutdown routine
 ; -----------------------------
 shutdown_computer:
     cli
@@ -330,7 +233,7 @@ shutdown_computer:
     jmp .halt
 
 ; -----------------------------
-; Data Section
+; Data section
 ; -----------------------------
 msg_welcome      db 13,10,"Micro Mouse Terminal",13,10,0
 msg_press_key    db 13,10,"Press any key to continue...",13,10,0
@@ -338,15 +241,6 @@ msg_press_key    db 13,10,"Press any key to continue...",13,10,0
 prompt           db 13,10,"MMT> ",0
 msg_help         db 13,10,"Commands: help, cls, reboot, shutdown",13,10,0
 msg_unknown      db 13,10,"Unknown command",13,10,0
-
-; CPU Exception Messages
-pf_msg           db 13,10,"CPU Exception: Page Fault (#PF)",13,10,0
-gp_msg           db 13,10,"CPU Exception: General Protection (#GP)",13,10,0
-np_msg           db 13,10,"CPU Exception: Segment Not Present (#NP)",13,10,0
-df_msg           db 13,10,"CPU Exception: Double Fault (#DF)",13,10,0
-ss_msg           db 13,10,"CPU Exception: Stack Fault (#SS)",13,10,0
-br_msg           db 13,10,"CPU Exception: Bounds (#BR)",13,10,0
-nm_msg           db 13,10,"CPU Exception: Device Not Available (#NM)",13,10,0
 
 cmd_help         db "help",0
 cmd_cls          db "cls",0
