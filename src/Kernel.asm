@@ -518,8 +518,11 @@ print_file_entry:
     mov ax, [si + 28]  ; Low word of file size
     call print_file_size
     
-    ; Print date/time
+    ; Print date/time (set DI to the entry pointer, preserve SI)
+    push si
+    mov di, si
     call print_file_datetime
+    pop si
     
     ; Print newline
     mov si, newline
@@ -532,30 +535,29 @@ print_file_entry:
 ; Print directory entry
 ; -----------------------------
 print_directory_entry:
-    push si
-    
-    ; Print <DIR> indicator
+    push si                ; save entry pointer
+
+    ; Print <DIR> indicator (print_string will change SI)
     mov si, dir_indicator
     call print_string
-    
-    pop si
-    push si
-    
-    ; Print directory name
+
+    pop si                 ; restore entry pointer for filename printing
     call print_filename
-    
+
     ; Print spaces instead of size for directories
+    push si
     mov si, dir_spaces
     call print_string
-    
-    ; Print date/time
+    pop si                 ; restore entry pointer
+
+    ; Print date/time (use DI so print_file_datetime doesn't depend on SI)
+    mov di, si
     call print_file_datetime
-    
+
     ; Print newline
     mov si, newline
     call print_string
-    
-    pop si
+
     ret
 
 ; -----------------------------
@@ -634,13 +636,17 @@ print_file_size:
 ; -----------------------------
 ; Print file date and time
 ; -----------------------------
+; Expects DI = pointer to directory entry
 print_file_datetime:
-    push si
-    
-    ; Get date (offset 24) and time (offset 22)
-    mov ax, [si + 24]  ; Date
-    mov bx, [si + 22]  ; Time
-    
+    push ax
+    push bx
+    push cx
+    push dx
+
+    ; Get date (offset 24) and time (offset 22) from DI
+    mov ax, [di + 24]  ; Date
+    mov bx, [di + 22]  ; Time
+
     ; Print date (MM/DD/YYYY format)
     ; Extract month (bits 5-8)
     mov cx, ax
@@ -654,7 +660,7 @@ print_file_datetime:
     int 0x10
     
     ; Extract day (bits 0-4)
-    mov ax, [si + 24]
+    mov ax, [di + 24]
     and ax, 0x1F
     call print_two_digits
     
@@ -663,7 +669,7 @@ print_file_datetime:
     int 0x10
     
     ; Extract year (bits 9-15) and add 1980
-    mov ax, [si + 24]
+    mov ax, [di + 24]
     shr ax, 9
     add ax, 1980
     call print_decimal_no_pad
@@ -675,7 +681,7 @@ print_file_datetime:
     
     ; Print time (HH:MM format)
     ; Extract hours (bits 11-15)
-    mov ax, bx
+    mov ax, [di + 22]
     shr ax, 11
     and ax, 0x1F
     call print_two_digits
@@ -685,12 +691,15 @@ print_file_datetime:
     int 0x10
     
     ; Extract minutes (bits 5-10)
-    mov ax, bx
+    mov ax, [di + 22]
     shr ax, 5
     and ax, 0x3F
     call print_two_digits
-    
-    pop si
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 
 ; -----------------------------
