@@ -281,11 +281,50 @@ sectors_per_track dw 18
 heads            dw 2
 
 ; -----------------------------
+; Check for FAT12 filesystem
+; Returns with carry flag set if not FAT12
+; -----------------------------
+check_filesystem:
+    pusha
+
+    ; Read boot sector (LBA 0) into fat_buffer
+    mov ax, 0
+    mov bx, fat_buffer
+    mov cx, 1
+    call read_sector
+    jc .cf_error    ; Propagate carry on read error
+
+    ; Compare filesystem identifier with "FAT12   "
+    mov si, fat_buffer + 0x36
+    mov di, fat12_id
+    mov cx, 8
+    repe cmpsb
+    jne .cf_not_fat12
+
+    ; Success, clear carry
+    clc
+    jmp .cf_done
+
+.cf_not_fat12:
+    stc ; Set carry, not FAT12
+
+.cf_error:
+    stc ; Set carry, disk read error
+
+.cf_done:
+    popa
+    ret
+
+; -----------------------------
 ; List directory (FAT12)
 ; -----------------------------
 list_directory:
     pusha
-    
+
+    ; First, check if the filesystem is FAT12
+    call check_filesystem
+    jc .invalid_fs
+
     ; Print header
     mov si, dir_header
     call print_string
@@ -412,11 +451,15 @@ list_directory:
     popa
     ret
     
+.invalid_fs:
+    mov si, invalid_fs_msg
+    call print_string
+    popa
+    ret
+
 .error:
     mov si, disk_error_msg
     call print_string
-    ; Show demo files as fallback
-    call show_demo_files
     popa
     ret
 
@@ -805,8 +848,9 @@ print_decimal:
     ret
 
 ; Messages
-disk_error_msg   db 13,10,"Disk read error - showing demo files:",13,10,0
-no_files_msg     db 13,10,"No files found - showing demo files:",13,10,0
+disk_error_msg   db 13,10,"Disk read error.",13,10,0
+invalid_fs_msg   db 13,10,"Invalid or unsupported disk format.",13,10,0
+fat12_id         db 'FAT12   '
 newline          db 13,10,0
 dir_header       db 13,10,"Directory of A:\",13,10,13,10,0
 dir_indicator    db "<DIR>    ",0
