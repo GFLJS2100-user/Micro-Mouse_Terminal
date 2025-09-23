@@ -30,9 +30,9 @@ $(BOOTLOADER_BIN): $(BOOTLOADER_SRC)
 	$(ASM) $(ASMFLAGS) $< -o $@
 
 # Compile kernel
-$(KERNEL_BIN): $(KERNEL_SRC)
+$(KERNEL_BIN): $(KERNEL_SRC) $(SRC_DIR)/FAT12.asm
 	mkdir -p $(BUILD_DIR)
-	$(ASM) $(ASMFLAGS) $< -o $@
+	$(ASM) $(ASMFLAGS) $(KERNEL_SRC) -o $@
 
 # Compile hello.com
 $(HELLO_COM): $(HELLO_SRC)

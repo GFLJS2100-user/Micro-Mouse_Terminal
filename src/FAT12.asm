@@ -827,25 +827,33 @@ load_file:
     mov ax, [cluster]
     mov cx, 3
     mul cx
-    mov cx, 2
-    div cx
+    mov bx, 2
+    div bx      ; ax = fat_offset, dx = remainder for even/odd check
 
-    ; Read FAT sector
-    push bx
-    push es
-    add ax, [reserved_sectors] ; FAT starts after reserved sectors
+    push dx     ; save remainder for even/odd check
+
+    ; Now ax = fat_offset. Calculate sector and offset within sector.
+    xor dx, dx
+    mov bx, [bytes_per_sector] ; 512
+    div bx      ; ax = fat_sector_offset, dx = offset_in_sector
+
+    ; Read the correct FAT sector
+    add ax, [reserved_sectors]
+    push dx     ; save offset_in_sector
+
     mov bx, fat_buffer
     call read_sector
-    pop es
-    pop bx
-    jc .error_lf
+    jc .error_lf_pop
+
+    pop dx      ; restore offset_in_sector
+    pop cx      ; restore remainder for even/odd check (into cx for now)
 
     ; Get next cluster from FAT entry
     mov si, fat_buffer
-    add si, dx
+    add si, dx  ; dx is offset_in_sector
     mov ax, [si]
 
-    test dx, 1
+    test cl, 1  ; check remainder
     jz .even
 .odd:
     shr ax, 4
@@ -865,6 +873,9 @@ load_file:
     clc
     jmp .finish_lf
 
+.error_lf_pop:
+    pop dx
+    pop cx
 .error_lf:
     stc
 
