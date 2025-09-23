@@ -592,7 +592,275 @@ demo_file1       db "KERNEL.BIN      8192  12/25/2023 10:30",13,10,0
 demo_file2       db "CONFIG.SYS       256  12/25/2023 09:15",13,10,0
 demo_file3       db "<DIR>    SYSTEM           12/25/2023 11:45",13,10,0
 
+; -----------------------------
+; Find a file in the root directory
+; IN: SI -> null-terminated filename
+; OUT: DI -> directory entry if found, carry set on error
+; -----------------------------
+find_file:
+    pusha
+
+    ; Convert filename to 8.3 format
+    mov di, filename_8_3
+    call to_8_3
+
+    ; Calculate root directory start sector
+    mov ax, [sectors_per_fat]
+    mov bl, [fat_count]
+    xor bh, bh
+    mul bx
+    add ax, [reserved_sectors]
+    mov bx, ax  ; BX = root directory start sector
+
+    ; Calculate number of root directory sectors
+    mov ax, [root_entries]
+    mov cx, 32
+    mul cx
+    mov cx, 512
+    div cx
+    test dx, dx
+    jz .no_remainder_ff
+    inc ax
+.no_remainder_ff:
+    mov cx, ax  ; CX = number of root directory sectors
+
+    ; Read root directory sectors
+    mov dx, 0   ; Sector counter
+
+.read_next_sector_ff:
+    cmp dx, cx
+    jae .not_found
+
+    ; Calculate current sector
+    mov ax, bx
+    add ax, dx
+
+    ; Read sector
+    push bx
+    push cx
+    push dx
+    mov bx, dir_buffer
+    mov cx, 1
+    call read_sector
+    pop dx
+    pop cx
+    pop bx
+    jc .error_ff
+
+    ; Parse directory entries in this sector
+    mov si, dir_buffer
+    mov di, 16  ; 16 entries per 512-byte sector
+
+.parse_entry_ff:
+    push bx
+    push cx
+    push dx
+    push di
+
+    ; Check for end of directory
+    mov al, [si]
+    cmp al, 0
+    je .not_found_in_sector
+
+    ; Compare filename
+    push si
+    mov di, filename_8_3
+    mov cx, 11
+    repe cmpsb
+    pop si
+    jne .next_entry_ff
+
+    ; Found it!
+    mov di, si  ; DI points to the entry
+    clc         ; Clear carry to indicate success
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    popa
+    ret
+
+.next_entry_ff:
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    add si, 32  ; Each directory entry is 32 bytes
+    dec di
+    jnz .parse_entry_ff
+
+.not_found_in_sector:
+    pop di
+    pop dx
+    pop cx
+    pop bx
+
+    ; Move to next sector
+    inc dx
+    jmp .read_next_sector_ff
+
+.not_found:
+    stc ; Set carry, not found
+    jmp .done_ff
+
+.error_ff:
+    stc ; Set carry, disk read error
+
+.done_ff:
+    popa
+    ret
+
+; -----------------------------
+; Convert null-terminated filename to 8.3 format
+; IN: SI -> null-terminated string, DI -> buffer for 8.3 name
+; -----------------------------
+to_8_3:
+    pusha
+
+    ; Fill buffer with spaces
+    mov cx, 11
+    mov al, ' '
+    rep stosb
+    sub di, 11
+
+    ; Copy filename part
+    mov cx, 8
+.name_loop:
+    lodsb
+    cmp al, '.'
+    je .ext
+    cmp al, 0
+    je .done
+
+    mov [di], al
+    inc di
+    loop .name_loop
+
+    ; After 8 chars, look for dot or end of string
+.find_ext:
+    lodsb
+    cmp al, '.'
+    je .ext
+    cmp al, 0
+    je .done
+    jmp .find_ext
+
+.ext:
+    ; Copy extension part
+    mov di, filename_8_3 + 8
+    mov cx, 3
+.ext_loop:
+    lodsb
+    cmp al, 0
+    je .done
+
+    mov [di], al
+    inc di
+    loop .ext_loop
+
+.done:
+    popa
+    ret
+
+; -----------------------------
+; Load a file into memory
+; IN: DI -> directory entry
+;     ES:BX -> destination buffer
+; OUT: Carry set on error
+; -----------------------------
+load_file:
+    pusha
+
+    mov ax, [di + 26] ; First cluster
+    mov [cluster], ax
+
+    ; Calculate data area start
+    ; data_start = reserved_sectors + (fat_count * sectors_per_fat) + root_sectors
+    mov ax, [sectors_per_fat]
+    mov bl, [fat_count]
+    xor bh, bh
+    mul bx
+    add ax, [reserved_sectors]
+    mov cx, ax ; save root start
+
+    mov ax, [root_entries]
+    mov dx, 32
+    mul dx
+    div word [bytes_per_sector]
+    add cx, ax
+    mov [data_sector], cx
+
+.load_loop:
+    ; Convert cluster to LBA
+    mov ax, [cluster]
+    sub ax, 2
+    add ax, [data_sector]
+
+    ; Read one sector
+    push es
+    push bx
+    call read_sector
+    pop bx
+    pop es
+    jc .error_lf
+
+    ; Advance buffer
+    add bx, 512
+
+    ; Get next cluster from FAT
+    mov ax, [cluster]
+    mov cx, 3
+    mul cx
+    mov cx, 2
+    div cx
+
+    ; Read FAT sector
+    push bx
+    push es
+    add ax, [reserved_sectors] ; FAT starts after reserved sectors
+    mov bx, fat_buffer
+    call read_sector
+    pop es
+    pop bx
+    jc .error_lf
+
+    ; Get next cluster from FAT entry
+    mov si, fat_buffer
+    add si, dx
+    mov ax, [si]
+
+    test dx, 1
+    jz .even
+.odd:
+    shr ax, 4
+    jmp .next_cluster
+
+.even:
+    and ax, 0x0FFF
+
+.next_cluster:
+    mov [cluster], ax
+    cmp ax, 0x0FF8
+    jae .done_lf ; End of chain
+
+    jmp .load_loop
+
+.done_lf:
+    clc
+    jmp .finish_lf
+
+.error_lf:
+    stc
+
+.finish_lf:
+    popa
+    ret
+
 ; Data for CHS conversion (moved to end to prevent corruption)
 chs_cylinder     db 0
 chs_head         db 0
 chs_sector       db 0
+filename_8_3     times 11 db 0
+cluster          dw 0
+data_sector      dw 0
+bytes_per_sector dw 512
