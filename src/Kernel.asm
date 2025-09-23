@@ -267,6 +267,6 @@ cmd_shutdown     db "shutdown",0
 
 input_buf        times 128 db 0
 
-%include "/src/FAT12.asm"
+%include "src/FAT12.asm"
 
 times 8192-($-$$) db 0
