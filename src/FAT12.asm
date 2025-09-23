@@ -732,6 +732,14 @@ to_8_3:
     cmp al, 0
     je .done
 
+    ; Convert to uppercase
+    cmp al, 'a'
+    jb .no_lowercase_name
+    cmp al, 'z'
+    ja .no_lowercase_name
+    sub al, 32
+.no_lowercase_name:
+
     mov [di], al
     inc di
     loop .name_loop
@@ -753,6 +761,14 @@ to_8_3:
     lodsb
     cmp al, 0
     je .done
+
+    ; Convert to uppercase
+    cmp al, 'a'
+    jb .no_lowercase_ext
+    cmp al, 'z'
+    ja .no_lowercase_ext
+    sub al, 32
+.no_lowercase_ext:
 
     mov [di], al
     inc di

@@ -198,11 +198,37 @@ handle_command:
     ret
 
 .check_run:
+    ; Extract command
     mov si, input_buf
+    mov di, command_buf
+.copy_cmd_loop:
+    lodsb
+    cmp al, ' '
+    je .cmd_done
+    cmp al, 0
+    je .cmd_done
+    stosb
+    jmp .copy_cmd_loop
+.cmd_done:
+    mov byte [di], 0
+
+    ; Compare command
+    mov si, command_buf
     mov di, cmd_run
-    call strncmp
+    call strcmp
     cmp ax, 0
     jne .unknown
+
+    ; It's the run command, now get the argument
+    mov si, input_buf
+.find_arg_loop:
+    lodsb
+    cmp al, ' '
+    je .arg_found
+    cmp al, 0
+    je .unknown ; no argument
+    jmp .find_arg_loop
+.arg_found:
     call run_file
     ret
 
@@ -262,17 +288,7 @@ shutdown_computer:
 ; Run file
 ; -----------------------------
 run_file:
-    ; Extract filename from input buffer
-    mov si, input_buf
-    add si, 4 ; Skip "run "
-.trim_spaces:
-    cmp byte [si], ' '
-    jne .found_filename
-    inc si
-    jmp .trim_spaces
-
-.found_filename:
-    ; SI now points to the filename
+    ; SI already points to the argument
     call find_file
     jc .file_not_found
 
@@ -323,31 +339,6 @@ run_file:
     call print_string
     ret
 
-; -----------------------------
-; String n compare
-; -----------------------------
-strncmp:
-    xor ax, ax
-    mov cx, 3 ; "run" is 3 chars
-.snc_loop:
-    lodsb
-    mov bl, [di]
-    inc di
-    cmp al, bl
-    jne .sneq
-    or al, al
-    jz .sneq ; Should not happen if strings are different length
-    loop .snc_loop
-
-    ; Check for space after "run"
-    cmp byte [si], ' '
-    jne .sneq
-
-    xor ax, ax
-    ret
-.sneq:
-    mov ax, 1
-    ret
 
 ; -----------------------------
 ; Data section
@@ -369,6 +360,7 @@ cmd_shutdown     db "shutdown",0
 cmd_run          db "run",0
 
 input_buf        times 128 db 0
+command_buf      times 128 db 0
 
 %include "src/FAT12.asm"
 
