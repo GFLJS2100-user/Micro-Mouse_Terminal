@@ -308,22 +308,16 @@ run_file:
     ; Save kernel state
     push ds
     push es
-    push ss
-    push sp
 
-    ; Set up program segment and stack
+    ; Set up program segment
     mov ax, 0x4000
     mov ds, ax
     mov es, ax
-    mov ss, ax
-    mov sp, 0xFFFE ; Top of 64k segment
 
     ; Call the program
     call 0x4000:0x0100
 
     ; Restore kernel state
-    pop sp
-    pop ss
     pop es
     pop ds
 
